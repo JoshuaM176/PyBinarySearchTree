@@ -2,9 +2,10 @@
 #include <Python.h>
 #include <math.h>
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define LEFT 0
-#define RIGHT 1
-#define ROOT 2
+
+static const int LEFT = 0;
+static const int RIGHT = 1;
+static const int ROOT = 2;
 
 // - - - - - BinarySearchTreeNode - - - - - //
 
@@ -76,7 +77,6 @@ static void BSTNode_update_height(BSTNode* op) {
 }
 
 static void BSTNode_right_rotation(BSTNode* op, BSTNode** parent_pointer) {
-    printf("Performed right rotation\n");
     BSTNode* temp = op->left;
     BSTNode* temp2 = temp->right;
     temp->right = op;
@@ -87,7 +87,6 @@ static void BSTNode_right_rotation(BSTNode* op, BSTNode** parent_pointer) {
 }
 
 static void BSTNode_left_rotation(BSTNode* op, BSTNode** parent_pointer) {
-    printf("Performed left rotation\n");
     BSTNode* temp = op->right;
     BSTNode* temp2 = temp->left;
     temp->left = op;
@@ -210,7 +209,7 @@ static PyObject* BinarySearchTree_display_tree(PyObject* op) {
     next[0] = self->root;
     int height = 0;
     PyObject* null_string = PyUnicode_FromFormat("NULL");
-    for(int i = self->root->height; i> 0;  i--) {
+    for(int i = self->root->height; i > 0;  i--) {
         int num_nodes = pow(2,height);
         for(int j = 0; j < num_nodes; j++){
             current[j] = next[j];
@@ -220,6 +219,7 @@ static PyObject* BinarySearchTree_display_tree(PyObject* op) {
             if(!temp) {
                 PyObject* temp_string2 = string;
                 string = PyUnicode_Concat(string, null_string);
+                printf("%s\n", PyUnicode_AsUTF8(string));
                 Py_DECREF(temp_string2);
                 next[h*2] = NULL;
                 next[h*2+1] = NULL;
@@ -228,6 +228,7 @@ static PyObject* BinarySearchTree_display_tree(PyObject* op) {
                 PyObject* temp_string = PyUnicode_FromFormat("%S", temp->key);
                 PyObject* temp_string2 = string;
                 string = PyUnicode_Concat(string, temp_string);
+                printf("%s\n", PyUnicode_AsUTF8(string));
                 Py_DECREF(temp_string); Py_DECREF(temp_string2);
                 next[h*2] = temp->left;
                 next[h*2+1] = temp->right;
@@ -251,27 +252,86 @@ static int BinarySearchTree_remove(PyObject* op, PyObject* key) {
     BSTNode* temp = self->root;
     BSTNode* stack[sizeof(Py_ssize_t)];
     int dir_stack[sizeof(Py_ssize_t)];
-    dir_stack[0] == ROOT;
+    dir_stack[0] = ROOT;
     int stack_index = 0;
     while(1) {
         if(!temp) {
             //TODO throw error
+            return -1;
         }
         stack[stack_index] = temp;
-        stack_index++;
         int rslt = PyObject_RichCompareBool(temp->key, key, Py_GT); if(rslt == -1) {return -1;}
         if(rslt == 1) {
             temp = temp->left;
+            ++stack_index;
             dir_stack[stack_index] = LEFT;
             continue;
         }
         rslt = PyObject_RichCompareBool(temp->key, key, Py_LT); if(rslt == -1) {return -1;}
         if(rslt == 1) {
             temp = temp->right;
+            ++stack_index;
             dir_stack[stack_index] = RIGHT;
             continue;
         }
         break;
+    }
+    BSTNode* parent_node = stack[stack_index-1];
+    BSTNode* reassign_node = NULL;
+    int reassign_direction = dir_stack[stack_index];
+    BSTNode* delete_node = temp; // stack[stack_index]
+    int deleted_index = stack_index;
+    if(delete_node->left && delete_node->right) {
+        stack_index++;
+        temp = delete_node->right;
+        stack[stack_index] = temp;
+        while(1) {
+            if(!temp->left) {
+                break;
+            }
+            temp = temp->left;
+            ++stack_index;
+            stack[stack_index] = temp;
+        }
+        reassign_node = temp;
+        stack[deleted_index] = reassign_node; //Replace the deleted node with the reassigned one
+        reassign_node->left = delete_node->left;
+        if(stack_index != deleted_index+1) {
+            reassign_node->right = delete_node->right;}
+    }
+    else {
+        if(delete_node->left) {
+            reassign_node = delete_node->left;
+        }
+        else if(delete_node->right) {
+            reassign_node = delete_node->right;
+        }
+    }
+    BSTNode_dealloc(delete_node);
+    if(reassign_direction == ROOT) {
+        self->root = reassign_node;
+    }
+    else {
+        if(reassign_direction == LEFT) {
+            parent_node->left = reassign_node;
+        }
+        else {
+            parent_node->right = reassign_node;
+        }
+    }
+    stack_index -= 1;
+    for(int i = stack_index; i >= 0; i--) {
+        switch(dir_stack[i]) {
+            case LEFT:
+                BSTNode_update(stack[i], &(stack[i-1]->left));
+                break;
+            case RIGHT:
+                BSTNode_update(stack[i], &(stack[i-1]->right));
+                break;
+            case ROOT:
+                BSTNode_update(stack[i], &(self->root));
+                break;
+        }
     }
     return 0;
 }
