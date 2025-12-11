@@ -297,6 +297,7 @@ static int BinarySearchTree_remove(PyObject* op, PyObject* key) {
         stack[deleted_index] = reassign_node; //Replace the deleted node with the reassigned one
         reassign_node->left = delete_node->left;
         if(stack_index != deleted_index+1) {
+            stack[stack_index-1]->left = reassign_node->right;
             reassign_node->right = delete_node->right;}
     }
     else {
