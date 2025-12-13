@@ -154,6 +154,7 @@ typedef struct BinarySearchTreeIterator BinarySearchTreeIterator;
 static PyTypeObject BinarySearchTreeIteratorType;
 static PyObject* BinarySearchTreeIterator_new(PyTypeObject* op, PyObject* args, PyObject* kwds);
 static int BinarySearchTreeIterator_init(PyObject* op, PyObject* args, PyObject* kwds);
+static PyObject* BinarySearchTree_remove(PyObject* op, PyObject* key);
 
 // Initialization and deallocation
 
@@ -228,6 +229,24 @@ static PyObject* BinarySearchTree_display_tree(PyObject* op) {
         height++;
     }
     return string; 
+}
+
+static PyObject* BinarySearchTree_pop(PyObject* op, PyObject* args, PyObject* kwds)
+{
+    BinarySearchTree* self = (BinarySearchTree*)op;
+    static char* kwlist[] = {"key", "default", NULL};
+    PyObject* key = NULL; PyObject* defaultvalue = NULL ;
+    if(!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", kwlist, &key, &defaultvalue)) { return NULL; }
+    PyObject* rslt = BinarySearchTree_remove(op, key);
+    if(!rslt)
+    {
+        if(defaultvalue && PyErr_Occurred())
+        {
+            if(PyErr_ExceptionMatches(PyExc_KeyError)) { PyErr_Clear(); return Py_NewRef(defaultvalue); }
+        }
+        return NULL;
+    }
+    return rslt;
 }
 
 // Internal Methods
@@ -452,6 +471,8 @@ static PyObject* BinarySearchTree_iter(PyObject* op)
 static PyMethodDef BinarySearchTree_methods[] =
 {
     {"display_tree", (PyCFunction)BinarySearchTree_display_tree, METH_NOARGS, "display tree"},
+    {"pop", (PyCFunction)BinarySearchTree_pop, METH_VARARGS|METH_KEYWORDS,
+    "Pop the given key off and return its value. If a default is provided an the key isn't found then return default, otherwise raise an exception."},
     {NULL, NULL, 0, NULL}
 };
 

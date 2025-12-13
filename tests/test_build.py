@@ -16,4 +16,4 @@ del new_tree[10]
 print(new_tree.display_tree())
 for item in new_tree:
     print(item)
-print("TEST")
+print(new_tree.pop(10, "default"))
