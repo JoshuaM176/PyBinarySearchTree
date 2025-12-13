@@ -14,3 +14,6 @@ del new_tree[17]
 print(new_tree.display_tree())
 del new_tree[10]
 print(new_tree.display_tree())
+for item in new_tree:
+    print(item)
+print("TEST")
