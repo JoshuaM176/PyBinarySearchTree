@@ -30,6 +30,7 @@ static void BSTNode_dealloc(BSTNode* op)
 static void BSTNode_dealloc_chain(BSTNode* op)
 {
     Py_XDECREF(op->value);
+    Py_XDECREF(op->key);
     if(op->left != NULL) { BSTNode_dealloc_chain(op->left); }
     if(op->right != NULL) { BSTNode_dealloc_chain(op->right); }
     free(op);
@@ -187,15 +188,27 @@ static int BinarySearchTree_init(PyObject* op, PyObject *args)
 
 // Methods
 
-static PyObject* BinarySearchTree_display_tree(PyObject* op) {
+static PyObject* BinarySearchTree_clear_method(PyObject* op)
+{
     BinarySearchTree* self = (BinarySearchTree*)op;
+    if(self->root) { BSTNode_dealloc_chain(self->root); }
+    self->length = 0;
+    self->root = NULL;
+    ++self->change_id;
+    return Py_NewRef(Py_None);
+}
+
+static PyObject* BinarySearchTree_display_tree(PyObject* op)
+{
+    BinarySearchTree* self = (BinarySearchTree*)op;
+    if(!self->root) { printf("Tree is empty\n"); return Py_NewRef(Py_None); }
     BSTNode* current[(int)pow(2,self->root->height)];
     BSTNode* next[(int)pow(2,self->root->height)];
     PyObject* string = PyUnicode_FromFormat("");
     if(!self->root) { return string; } 
     next[0] = self->root;
     int height = 0;
-    PyObject* null_string = PyUnicode_FromFormat("NULL");
+    PyObject* null_string = PyUnicode_FromFormat("NULL ");
     for(int i = self->root->height; i > 0;  i--)
     {
         int num_nodes = pow(2,height);
@@ -217,7 +230,7 @@ static PyObject* BinarySearchTree_display_tree(PyObject* op) {
             }
             else
             {
-                PyObject* temp_string = PyUnicode_FromFormat("%S", temp->key);
+                PyObject* temp_string = PyUnicode_FromFormat("%S ", temp->key);
                 PyObject* temp_string2 = string;
                 string = PyUnicode_Concat(string, temp_string);
                 printf("%s\n", PyUnicode_AsUTF8(string));
@@ -353,8 +366,8 @@ static int BinarySearchTree_assign(PyObject* op, PyObject* key, PyObject* value)
     if(!self->root)
     {
         self->root = BSTNode_new(); if(!self->root) { return -1; }
-        self->root->key = Py_NewRef(key);
-        self->root->value = Py_NewRef(value);
+        Py_SETREF(self->root->key, Py_NewRef(key));
+        Py_SETREF(self->root->value, Py_NewRef(value));
         ++self->length;
         ++self->change_id;
         return 0;
@@ -470,6 +483,8 @@ static PyObject* BinarySearchTree_iter(PyObject* op)
 
 static PyMethodDef BinarySearchTree_methods[] =
 {
+    {"clear", (PyCFunction)BinarySearchTree_clear_method, METH_NOARGS,
+    "Clear all items from the tree."},
     {"display_tree", (PyCFunction)BinarySearchTree_display_tree, METH_NOARGS, "display tree"},
     {"pop", (PyCFunction)BinarySearchTree_pop, METH_VARARGS|METH_KEYWORDS,
     "Pop the given key off and return its value. If a default is provided an the key isn't found then return default, otherwise raise an exception."},
