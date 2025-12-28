@@ -24,3 +24,9 @@ print(new_tree)
 new_test = BinarySearchTree()
 new_test["Hello"] = 5
 print(new_test)
+print("test")
+new_test["double"] = 5
+test_items_print = new_test.items()
+print(test_items_print)
+print()
+print(new_test.get("Helo", "banana"))

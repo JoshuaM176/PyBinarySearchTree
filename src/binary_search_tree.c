@@ -9,6 +9,18 @@ static const int LEFT = 0;
 static const int RIGHT = 1;
 static const int ROOT = 2;
 
+// This steals a reference to left_string and right_string, then concats them and returns the new string. Checks both strings for nulls and decrefs both.
+// The purpose here is to get rid of repetitive code checking by handling the boilerplate stuff that always needs to happen inside of this function.
+static PyObject* PyUnicode_concat_decref(PyObject* left_string, PyObject* right_string)
+{
+    if(!right_string) { Py_XDECREF(left_string); return NULL; }
+    if(!left_string) { Py_DECREF(right_string); return NULL; }
+    PyObject* rslt = PyUnicode_Concat(left_string, right_string); if(!rslt) { Py_DECREF(right_string); Py_DECREF(left_string); return NULL; }
+    Py_DECREF(right_string);
+    Py_DECREF(left_string);
+    return rslt;
+}
+
 // - - - - - BinarySearchTreeNode - - - - - //
 
 typedef struct BSTNode
@@ -152,14 +164,14 @@ typedef struct
 // Forward Declarations
 
 typedef struct BSTIterator BSTIterator;
-typedef struct BSTItems BSTItems;
+typedef struct BinarySearchTreeItems BinarySearchTreeItems;
 static PyTypeObject BSTIteratorType;
-static PyTypeObject BSTItemsType;
-static PyObject* BSTIterator_new(PyTypeObject* op, PyObject* args, PyObject* kwds);
-static int BSTIterator_init(PyObject* op, PyObject* args, PyObject* kwds);
-static PyObject* BSTItems_new(PyTypeObject* op, PyObject* args, PyObject* kwds);
-static int BSTItems_init(PyObject* op, PyObject* args, PyObject* kwds);
+static PyTypeObject BinarySearchTreeItemsType;
+static PyObject* BSTIterator_new(PyTypeObject* op, PyObject* args);
+static PyObject* BinarySearchTreeItems_new(PyTypeObject* op, PyObject* args, PyObject* kwds);
+static int BinarySearchTreeItems_init(PyObject* op, PyObject* args, PyObject* kwds);
 static PyObject* BinarySearchTree_remove(PyObject* op, PyObject* key);
+static PyObject* BinarySearchTree_subscript(PyObject* op, PyObject* key);
 
 // Initialization and deallocation
 
@@ -250,25 +262,46 @@ static PyObject* BinarySearchTree_display_tree(PyObject* op)
 
 static PyObject* BinarySearchTree_items(PyObject* op)
 {
-    BSTItems* items = (BSTItems*)BSTItems_new(&BSTItemsType, NULL, NULL); if(!items) { return NULL; }
+    BinarySearchTreeItems* items = (BinarySearchTreeItems*)BinarySearchTreeItems_new(&BinarySearchTreeItemsType, NULL, NULL); if(!items) { return NULL; }
     PyObject* args = PyTuple_Pack(1, op);
-    if(BSTItems_init((PyObject*)items, args, NULL)) { Py_DECREF(args); return NULL; }
+    if(BinarySearchTreeItems_init((PyObject*)items, args, NULL)) { Py_DECREF(args); return NULL; }
     Py_DECREF(args);
     return (PyObject*)items;
+}
+
+static PyObject* BinarySearchTree_get(PyObject* op, PyObject* args, PyObject* kwds)
+{
+    BinarySearchTree* self = (BinarySearchTree*)op;
+    static char* kwlist[] = {"key", "default", NULL};
+    PyObject* key; PyObject* default_value = Py_NewRef(Py_None);
+    if(!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", kwlist, &key, &default_value)) { return NULL; }
+    PyObject* rslt = BinarySearchTree_subscript(op, key);
+    if(rslt) {
+        return rslt;
+    }
+    if(PyErr_Occurred()) {
+        if(PyErr_ExceptionMatches(PyExc_KeyError)) 
+        {
+            PyErr_Clear();   
+            return Py_NewRef(default_value); 
+        }
+        return NULL;
+    }
+    return NULL;
 }
 
 static PyObject* BinarySearchTree_pop(PyObject* op, PyObject* args, PyObject* kwds)
 {
     BinarySearchTree* self = (BinarySearchTree*)op;
     static char* kwlist[] = {"key", "default", NULL};
-    PyObject* key = NULL; PyObject* defaultvalue = NULL ;
-    if(!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", kwlist, &key, &defaultvalue)) { return NULL; }
+    PyObject* key = NULL; PyObject* default_value = NULL ;
+    if(!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", kwlist, &key, &default_value)) { return NULL; }
     PyObject* rslt = BinarySearchTree_remove(op, key);
     if(!rslt)
     {
-        if(defaultvalue && PyErr_Occurred())
+        if(default_value && PyErr_Occurred())
         {
-            if(PyErr_ExceptionMatches(PyExc_KeyError)) { PyErr_Clear(); return Py_NewRef(defaultvalue); }
+            if(PyErr_ExceptionMatches(PyExc_KeyError)) { PyErr_Clear(); return Py_NewRef(default_value); }
         }
         return NULL;
     }
@@ -478,17 +511,42 @@ static PyObject* BinarySearchTree_subscript(PyObject* op, PyObject* key)
             temp = temp->right;
             continue;
         }
-        return temp->value;
+        return Py_NewRef(temp->value);
     }
 }
 
 // __Methods__
 
+static PyObject* BinarySearchTree_iter(PyObject* op);
+static PyObject* BSTItemsIterator_next(PyObject* op);
+
+static PyObject* BinarySearchTree_str(PyObject* op)
+{
+    PyObject* iterator = BinarySearchTree_iter(op);
+    PyObject* tmp;
+    PyObject* string = PyUnicode_FromString("{");
+    while(tmp = BSTItemsIterator_next(iterator))
+    {
+        string = PyUnicode_concat_decref(string, PyUnicode_FromFormat("%R: %R, ", PyTuple_GET_ITEM(tmp, 0), PyTuple_GET_ITEM(tmp, 1)));
+        Py_DECREF(tmp);
+        if(!string) { return NULL; }
+    }
+    if(PyErr_Occurred())
+    {
+        Py_XDECREF(iterator);
+        Py_XDECREF(string);
+        return NULL;
+    }
+    Py_DECREF(iterator);
+    PyObject* tmp2 = PyObject_CallMethod(string, "rstrip", "s", ", "); Py_DECREF(string);
+    string = PyUnicode_concat_decref(tmp2, PyUnicode_FromString("}")); if(!string) { return NULL; }
+    return string;
+}
+
 static PyObject* BinarySearchTree_iter(PyObject* op)
 {
-    BSTIterator* iterator = (BSTIterator*)BSTIterator_new(&BSTIteratorType, NULL, NULL); if(!iterator) { return NULL; }
     PyObject* args = PyTuple_Pack(1, op); if(!args) { return NULL; }
-    if(BSTIterator_init((PyObject*)iterator, args, NULL)) { Py_DECREF(args); return NULL; }
+    BSTIterator* iterator = (BSTIterator*)BSTIterator_new(&BSTIteratorType, args); if(!iterator) { Py_DECREF(args); return NULL; }
     Py_DECREF(args);
     return (PyObject*)iterator;
 }
@@ -502,6 +560,8 @@ static PyMethodDef BinarySearchTree_methods[] =
     "Returns a view of this tree's key-value pairs that can be iterated over."},
     {"pop", (PyCFunction)BinarySearchTree_pop, METH_VARARGS|METH_KEYWORDS,
     "Pop the given key off and return its value. If a default is provided an the key isn't found then return default, otherwise raise an exception."},
+    {"get", (PyCFunction)BinarySearchTree_get, METH_VARARGS|METH_KEYWORDS,
+    "Get the value of the given key, return default if key is not found."},
     {NULL, NULL, 0, NULL}
 };
 
@@ -520,7 +580,7 @@ static PyTypeObject BinarySearchTreeType =
     .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "py_binary_search_tree.binary_search_tree.BinarySearchTree",
     .tp_doc = PyDoc_STR("Binary Search Tree"),
-    .tp_basicsize = sizeof(BinarySearchTree)+16,
+    .tp_basicsize = sizeof(BinarySearchTree) + 16,
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_new = (newfunc)BinarySearchTree_new,
@@ -529,7 +589,9 @@ static PyTypeObject BinarySearchTreeType =
     .tp_methods = BinarySearchTree_methods,
     .tp_as_sequence = &BinarySearchTree_sequence,
     .tp_as_mapping = &BinarySearchTree_map,
-    .tp_iter = (getiterfunc)BinarySearchTree_iter
+    .tp_iter = (getiterfunc)BinarySearchTree_iter,
+    .tp_str = (reprfunc)BinarySearchTree_str,
+    .tp_repr = (reprfunc)BinarySearchTree_str
 };
 
 static int binary_search_tree_module_exec(PyObject *m)
@@ -545,31 +607,32 @@ static int binary_search_tree_module_exec(PyObject *m)
     return 0;
 }
 
-// - - - - - BSTItems - - - - - //
+// - - - - - BinarySearchTreeItems - - - - - //
 
-typedef struct BSTItems
+typedef struct BinarySearchTreeItems
 {
     PyObject_HEAD
     PyObject* tree;
-} BSTItems;
+} BinarySearchTreeItems;
 
 // Forward declarations
 
 static PyTypeObject BSTItemsIteratorType;
+static PyObject* BinarySearchTreeItems_iter(PyObject* op);
 
 // Initialization and deallocation
 
-static void BSTItems_dealloc(PyObject* op)
+static void BinarySearchTreeItems_dealloc(PyObject* op)
 {
-    BSTItems* self = (BSTItems*)op;
+    BinarySearchTreeItems* self = (BinarySearchTreeItems*)op;
     Py_XDECREF(self->tree);
     Py_TYPE(self)->tp_free(self);
 }
 
-static PyObject* BSTItems_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
+static PyObject* BinarySearchTreeItems_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
 {
-    BSTItems* self;
-    self = (BSTItems*)type->tp_alloc(type, 0);
+    BinarySearchTreeItems* self;
+    self = (BinarySearchTreeItems*)type->tp_alloc(type, 0);
     if(self != NULL)
     {
         self->tree = NULL;
@@ -577,9 +640,9 @@ static PyObject* BSTItems_new(PyTypeObject* type, PyObject* args, PyObject* kwds
     return (PyObject*)self;
 }
 
-static int BSTItems_init(PyObject* op, PyObject* args, PyObject* kwds)
+static int BinarySearchTreeItems_init(PyObject* op, PyObject* args, PyObject* kwds)
 {
-    BSTItems* self = (BSTItems*)op;
+    BinarySearchTreeItems* self = (BinarySearchTreeItems*)op;
     static char* kwlist[] = {"tree", NULL};
     if(!PyArg_ParseTupleAndKeywords(args, kwds, "O", kwlist, &self->tree)) { return -1; }
     return 0;
@@ -587,35 +650,59 @@ static int BSTItems_init(PyObject* op, PyObject* args, PyObject* kwds)
 
 // __Methods__
 
-static PyObject* BSTItems_iter(PyObject* op)
+static PyObject* BinarySearchTreeItems_str(PyObject* op)
 {
-    BSTItems* self = (BSTItems*)op;
-    BSTIterator* iterator = (BSTIterator*)BSTIterator_new(&BSTItemsIteratorType, NULL, NULL); if(!iterator) { return NULL; }
-    PyObject* init_args = PyTuple_Pack(1, self->tree); if(!init_args) { return NULL; }
-    if(BSTIterator_init((PyObject*)iterator, init_args, NULL)) { return NULL; }
+    PyObject* iterator = BinarySearchTreeItems_iter(op);
+    PyObject* tmp;
+    PyObject* string = PyUnicode_FromString("binary_search_tree_items([");
+    while(tmp = BSTItemsIterator_next(iterator))
+    {
+        string = PyUnicode_concat_decref(string, PyUnicode_FromFormat("(%R, %R), ", PyTuple_GET_ITEM(tmp, 0), PyTuple_GET_ITEM(tmp, 1)));
+        Py_DECREF(tmp);
+        if(!string) { return NULL; }
+    }
+    if(PyErr_Occurred())
+    {
+        Py_XDECREF(iterator);
+        Py_XDECREF(string);
+        return NULL;
+    }
+    Py_DECREF(iterator);
+    PyObject* tmp2 = PyObject_CallMethod(string, "rstrip", "s", ", "); Py_DECREF(string);
+    string = PyUnicode_concat_decref(tmp2, PyUnicode_FromString("])")); if(!string) { return NULL; }
+    return string;
+}
+
+static PyObject* BinarySearchTreeItems_iter(PyObject* op)
+{
+    BinarySearchTreeItems* self = (BinarySearchTreeItems*)op;
+    PyObject* args = PyTuple_Pack(1, self->tree); if(!args) { return NULL; }
+    BSTIterator* iterator = (BSTIterator*)BSTIterator_new(&BSTItemsIteratorType, args); if(!iterator) { Py_DECREF(args); return NULL; }
     return (PyObject*)iterator;
 }
 
-static PyTypeObject BSTItemsType = 
+static PyTypeObject BinarySearchTreeItemsType = 
 {
     .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "py_binary_search_tree.binary_search_tree.BSTItems",
-    .tp_doc = PyDoc_STR("Binary Search Tree Iterator"),
-    .tp_basicsize = sizeof(BSTItems),
+    .tp_name = "py_binary_search_tree.binary_search_tree.BinarySearchTreeItems",
+    .tp_doc = PyDoc_STR("Binary Search Tree Items View"),
+    .tp_basicsize = sizeof(BinarySearchTreeItems),
     .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_new = (newfunc)BSTItems_new,
-    .tp_init = (initproc)BSTItems_init,
-    .tp_dealloc = (destructor)BSTItems_dealloc,
-    .tp_iter = (getiterfunc)BSTItems_iter
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new = (newfunc)BinarySearchTreeItems_new,
+    .tp_init = (initproc)BinarySearchTreeItems_init,
+    .tp_dealloc = (destructor)BinarySearchTreeItems_dealloc,
+    .tp_iter = (getiterfunc)BinarySearchTreeItems_iter,
+    .tp_str = (reprfunc)BinarySearchTreeItems_str,
+    .tp_repr = (reprfunc)BinarySearchTreeItems_str
 };
 
-static int bst_items_module_exec(PyObject *m)
+static int binary_search_tree_items_module_exec(PyObject *m)
 {
-    if (PyType_Ready(&BSTItemsType) < 0) {return -1;}
-    Py_INCREF(&BSTItemsType);
-    if (PyModule_AddObject(m, "BSTItems", (PyObject *) &BSTItemsType) < 0) {
-        Py_DECREF(&BSTItemsType);
+    if (PyType_Ready(&BinarySearchTreeItemsType) < 0) {return -1;}
+    Py_INCREF(&BinarySearchTreeItemsType);
+    if (PyModule_AddObject(m, "BinarySearchTreeItems", (PyObject *) &BinarySearchTreeItemsType) < 0) {
+        Py_DECREF(&BinarySearchTreeItemsType);
         Py_DECREF(m);
         return -1;
     }
@@ -635,7 +722,7 @@ typedef struct BSTIterator
 
 // Forward declarations
 
-static int BSTIterator_add(PyObject* op, BSTNode* node);
+static void BSTIterator_add(PyObject* op, BSTNode* node);
 
 // Initialization and deallocation
 
@@ -646,34 +733,24 @@ static void BSTIterator_dealloc(PyObject *op)
     Py_TYPE(self)->tp_free(self);
 }
 
-static PyObject* BSTIterator_new(PyTypeObject* type, PyObject* args, PyObject* kwds) 
+static PyObject* BSTIterator_new(PyTypeObject* type, PyObject* args) 
 {
     BSTIterator* self;
     self = (BSTIterator*)type->tp_alloc(type, 0);
     if(self != NULL)
     {
-        self->tree = NULL;
-        self->change_id = 0;
+        if(!PyArg_ParseTuple(args, "O", &self->tree)) { Py_DECREF(self); return NULL; }
+        Py_INCREF(self->tree);
+        self->change_id = ((BinarySearchTree*)self->tree)->change_id;
         self->stack_index = 0;
+        BSTIterator_add((PyObject*)self, ((BinarySearchTree*)self->tree)->root);
     }
     return (PyObject*)self; 
 }
 
-static int BSTIterator_init(PyObject* op, PyObject* args, PyObject* kwds) 
-{
-    BSTIterator* self = (BSTIterator*)op;
-    if(self->tree) { PyErr_SetString(PyExc_TypeError, "init method called twice"); return -1; }
-    static char* kwlist[] = {"tree", NULL};
-    if(!PyArg_ParseTupleAndKeywords(args, kwds, "O", kwlist, &self->tree)) { return -1; }
-    Py_INCREF(self->tree);
-    self->change_id = ((BinarySearchTree*)self->tree)->change_id;
-    BSTIterator_add(op, ((BinarySearchTree*)self->tree)->root);
-    return 0;
-}
-
 // Internal methods
 
-static int BSTIterator_add(PyObject* op, BSTNode* node) 
+static void BSTIterator_add(PyObject* op, BSTNode* node) 
 {
     BSTIterator* self = (BSTIterator*)op;
     BSTNode* temp = node;
@@ -684,7 +761,6 @@ static int BSTIterator_add(PyObject* op, BSTNode* node)
         ++self->stack_index;
         temp = temp->left;
     }
-    return 0;
 }
 
 static PyObject* BSTIterator_remove(PyObject* op) 
@@ -714,7 +790,7 @@ static PyObject* BSTItemsIterator_remove(PyObject* op)
 static PyObject* BSTIterator_next(PyObject* op) 
 {
     BSTIterator* self = (BSTIterator*)op;
-    if(((BinarySearchTree*)self->tree)->change_id != self->change_id) { PyErr_SetString(PyExc_RuntimeError, "Tree was modified during iteration."); return NULL; }
+    if(((BinarySearchTree*)self->tree)->change_id != self->change_id) { PyErr_SetString(PyExc_RuntimeError, "Tree size changed during iteration."); return NULL; }
     if(self->stack_index <= 0) { return NULL; }
     return BSTIterator_remove(op);
 }
@@ -722,14 +798,9 @@ static PyObject* BSTIterator_next(PyObject* op)
 static PyObject* BSTItemsIterator_next(PyObject* op) 
 {
     BSTIterator* self = (BSTIterator*)op;
-    if(((BinarySearchTree*)self->tree)->change_id != self->change_id) { PyErr_SetString(PyExc_RuntimeError, "Tree was modified during iteration."); return NULL; }
+    if(((BinarySearchTree*)self->tree)->change_id != self->change_id) { PyErr_SetString(PyExc_RuntimeError, "Tree size changed during iteration."); return NULL; }
     if(self->stack_index <= 0) { return NULL; }
     return BSTItemsIterator_remove(op);
-}
-
-static PyObject* BSTIterator_iter(PyObject* op)
-{
-    return op;
 }
 
 static PyTypeObject BSTIteratorType = 
@@ -740,10 +811,8 @@ static PyTypeObject BSTIteratorType =
     .tp_basicsize = sizeof(BSTIterator),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_new = (newfunc)BSTIterator_new,
-    .tp_init = (initproc)BinarySearchTree_init,
     .tp_dealloc = (destructor)BSTIterator_dealloc,
-    .tp_iter = (getiterfunc)BSTIterator_iter,
+    .tp_iter = PyObject_SelfIter,
     .tp_iternext = (iternextfunc)BSTIterator_next
 };
 
@@ -755,10 +824,8 @@ static PyTypeObject BSTItemsIteratorType =
     .tp_basicsize = sizeof(BSTIterator),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_new = (newfunc)BSTIterator_new,
-    .tp_init = (initproc)BinarySearchTree_init,
     .tp_dealloc = (destructor)BSTIterator_dealloc,
-    .tp_iter = (getiterfunc)BSTIterator_iter,
+    .tp_iter = PyObject_SelfIter, 
     .tp_iternext = (iternextfunc)BSTItemsIterator_next
 };
 
@@ -791,7 +858,7 @@ static int bst_items_iterator_module_exec(PyObject *m)
 static PyModuleDef_Slot py_binary_search_tree_module_slots[] = 
 {
     {Py_mod_exec, binary_search_tree_module_exec},
-    {Py_mod_exec, bst_items_module_exec},
+    {Py_mod_exec, binary_search_tree_items_module_exec},
     {Py_mod_exec, bst_iterator_module_exec},
     {Py_mod_exec, bst_items_iterator_module_exec},
     {Py_mod_multiple_interpreters, Py_MOD_MULTIPLE_INTERPRETERS_NOT_SUPPORTED},
@@ -803,8 +870,9 @@ static PyModuleDef_Slot py_binary_search_tree_module_slots[] =
 static PyModuleDef_Slot py_binary_search_tree_module_slots[] = 
 {
     {Py_mod_exec, binary_search_tree_module_exec},
-    {Py_mod_exec, bst_items_module_exec},
+    {Py_mod_exec, binary_search_tree_items_module_exec},
     {Py_mod_exec, bst_iterator_module_exec},
+    {Py_mod_exec, bst_items_iterator_module_exec},
     {0, NULL}
 };
 

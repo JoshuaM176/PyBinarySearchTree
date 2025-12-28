@@ -1,8 +1,8 @@
 from typing import Iterable, Any, overload
 
-class BSTItems:
+class BinarySearchTreeItems:
     def __init__(self, tree: BinarySearchTree) -> None: ...
-    def __iter__(self): ... #TODO
+    def __iter__(self) -> Iterable: ... #TODO
 
 class BinarySearchTree:
     def __init__(self) -> None: ...
