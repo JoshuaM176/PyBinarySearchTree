@@ -31,3 +31,10 @@ print(test_items_print)
 print()
 print(new_test)
 print(new_test.copy())
+
+for key in new_test.keys():
+    print(key)
+print(new_test.keys())
+
+new_test.update({"test": 7, "double": 10})
+print(new_test)
