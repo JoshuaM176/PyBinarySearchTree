@@ -29,4 +29,5 @@ new_test["double"] = 5
 test_items_print = new_test.items()
 print(test_items_print)
 print()
-print(new_test.get("Helo", "banana"))
+print(new_test)
+print(new_test.copy())
