@@ -16,12 +16,13 @@ new_tree.display_tree()
 for item in new_tree:
     print(item)
 print(new_tree.pop(10, "default"))
+
 new_tree.display_tree()
 for key, value in new_tree.items():
     print(key, value)
 print(new_tree)
 
-new_test = BinarySearchTree()
+new_test: BinarySearchTree[str, int] = BinarySearchTree()
 new_test["Hello"] = 5
 print(new_test)
 print("test")
@@ -38,3 +39,8 @@ print(new_test.keys())
 
 new_test.update({"test": 7, "double": 10})
 print(new_test)
+print(new_test.values())
+
+
+test_thing = BinarySearchTree.fromkeys(("test", "test2"))
+print(test_thing)

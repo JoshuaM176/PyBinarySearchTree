@@ -1,21 +1,45 @@
-from typing import Iterable, Any, overload
+from typing import Iterator, Iterable, Any, overload, _S
+from _typeshed import _KT, _VT, _T, SupportsKeysAndGetItem
+from collections.abc import MutableMapping
 
-class BinarySearchTreeItems:
-    def __init__(self, tree: BinarySearchTree) -> None: ...
-    def __iter__(self) -> Iterable: ... #TODO
 
-class BinarySearchTree:
-    def __init__(self) -> None: ...
+class BinarySearchTree(MutableMapping[_KT, _VT]):
     def clear(self) -> None:
         """Removes all items from tree."""
         ...
-    def items(self) -> Any:
+    def items(self) -> Iterable[tuple[_KT, _VT]]:
         """Returns a view of this tree's key-value pairs that can be iterated over."""
-    @overload
-    def pop(self, key: Any):
-        """Pop the given key off and return its value. Raise KeyError exception if key is not found."""
+        ...
+    def keys(self) -> Iterable[_KT]:
+        """Returns a view of this tree's keys that can be iterated over."""
+        ...
+    def values(self) -> Iterable[_VT]:
+        """Returns a view of this tree's values that can be iterated over."""
         ...
     @overload
-    def pop(self, key: Any, default: Any):
-        """Pop the given key off and return its value. Return the default if key is not found."""
-    def __iter__(self): ... #TODO
+    def get(self, key: _KT, default: None = None) -> _VT | None:
+        """Return the value for the key if the key is in the tree, otherwise return default."""
+        ...
+    @overload
+    def get(self, key: _KT, default: _VT) -> _VT: ...
+    @overload
+    def get(self, key: _KT, default: _T) -> _VT | _T: ...
+    @overload
+    def pop(self, key: _KT) -> _VT:
+        """Remove the specified key and return the corresponding value. If key is not found return the default if provided, else raise KeyError exception."""
+        ...
+    @overload
+    def pop(self, key: _KT, default: _VT) -> _VT: ...
+    @overload
+    def pop(self, key: _KT, default: _T) -> _VT | _T: ...
+    @overload
+    def update(self, m: SupportsKeysAndGetItem[_KT, _VT], /) -> None: ...
+    @classmethod
+    @overload
+    def fromkeys(self, iterable: Iterable[_T], value: None = None, /) -> BinarySearchTree[_T, None | Any]:
+        """Create a new tree with keys from iterable and value set to value."""
+        ...
+    @classmethod
+    @overload
+    def fromkeys(self, iterable: Iterable[_T], value: _S, /) -> BinarySearchTree[_T, _S]: ...
+    def __iter__(self) -> Iterator[_KT]: ...
