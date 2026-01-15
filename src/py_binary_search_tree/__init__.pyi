@@ -4,6 +4,10 @@ from collections.abc import MutableMapping
 
 
 class BinarySearchTree(MutableMapping[_KT, _VT]):
+    @overload
+    def __init__(self) -> None: ...
+    @overload
+    def __init__(self, m: SupportsKeysAndGetItem[_KT, _VT]) -> None: ...
     def clear(self) -> None:
         """Removes all items from tree."""
         ...

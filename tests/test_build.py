@@ -1,46 +1,53 @@
 from py_binary_search_tree import BinarySearchTree
-new_tree = BinarySearchTree()
-new_tree[10] = 5
-new_tree[11] = 6
-new_tree[9] = 6
-new_tree[12] = 5
-new_tree[13] = 5
-new_tree[14] = 5
-new_tree[15] = 5
-new_tree[17] = 5
-new_tree.display_tree()
-del new_tree[17]
-new_tree.display_tree()
-del new_tree[10]
-new_tree.display_tree()
-for item in new_tree:
-    print(item)
-print(new_tree.pop(10, "default"))
+import weakref
 
-new_tree.display_tree()
-for key, value in new_tree.items():
-    print(key, value)
-print(new_tree)
+class DummyClass():
+    def __init__(self, id: int):
+        self.id = id
 
-new_test: BinarySearchTree[str, int] = BinarySearchTree()
-new_test["Hello"] = 5
-print(new_test)
-print("test")
-new_test["double"] = 5
-test_items_print = new_test.items()
-print(test_items_print)
-print()
-print(new_test)
-print(new_test.copy())
+    def __str__(self):
+        return str(self.id)
 
-for key in new_test.keys():
-    print(key)
-print(new_test.keys())
+def test_assigning_and_indexing():
+    new_tree = BinarySearchTree()
+    new_tree["test1"] = 1
+    new_tree["test2"] = 2
+    new_tree["test3"] = 3
+    assert new_tree["test1"] == 1
+    assert new_tree.pop("test2") == 2
+    assert new_tree.get("test3") == 3
+    assert new_tree.get("test2") == None
 
-new_test.update({"test": 7, "double": 10})
-print(new_test)
-print(new_test.values())
+def test_items_keys_values():
+    new_tree = BinarySearchTree()
+    new_tree["0"] = 0
+    new_tree["1"] = 1
+    new_tree["2"] = 2
+    for i, item in enumerate(new_tree.items()):
+        assert (str(i), i) == item
+    for i, key in enumerate(new_tree.keys()):
+        assert key == str(i)
+    for i, value in enumerate(new_tree.values()):
+        assert value == i
 
 
-test_thing = BinarySearchTree.fromkeys(("test", "test2"))
-print(test_thing)
+def test_dereferencing():
+    new_tree = BinarySearchTree()
+    new_tree["test1"] = DummyClass(1)
+    new_tree["test2"] = DummyClass(2)
+    ref1 = weakref.ref(new_tree["test1"])
+    copy_tree = new_tree.copy()
+    new_tree.pop("test1")
+    assert str(copy_tree["test1"]) == "1"
+    del copy_tree["test1"]
+    assert ref1() is None
+    del copy_tree["test2"]
+    ref2 = weakref.ref(new_tree["test2"])
+    new_tree["test2"] = DummyClass(3)
+    assert ref2() is None
+
+
+if __name__ == "__main__":
+    test_assigning_and_indexing()
+    test_items_keys_values()
+    test_dereferencing()
