@@ -3,6 +3,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <math.h>
+#include <limits.h>
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 static const int LEFT = 0;
@@ -72,13 +73,17 @@ static BSTNode* BSTNode_new()
 
 static void BSTNode_update_height(BSTNode* op)
 {
-    int left_height;
-    int right_height;
-    if(!op->left) { left_height = 0; }
-    else { left_height = op->left->height; }
-    if(!op->right) { right_height = 0; }
-    else { right_height = op->right->height; }
-    op->height = MAX(left_height+1, right_height+1);
+    int max_height = 0;
+    if(op->left) 
+    {
+        max_height = op->left->height;
+    }
+    if(op->right)
+    {
+        max_height = MAX(max_height, op->right->height);
+    }
+    ++max_height;
+    op->height = max_height;
 }
 
 static void BSTNode_right_rotation(BSTNode* op, BSTNode** parent_pointer)
@@ -337,8 +342,8 @@ static PyObject* BinarySearchTree_copy(PyObject* op)
         return (PyObject*)new; 
     }
     new->length = self->length;
-    BSTNode* og_stack[sizeof(Py_ssize_t)];
-    BSTNode* new_stack[sizeof(Py_ssize_t)];
+    BSTNode* og_stack[sizeof(Py_ssize_t)*CHAR_BIT];
+    BSTNode* new_stack[sizeof(Py_ssize_t)*CHAR_BIT];
     int stack_index = 0;
     BSTNode* og_temp = self->root;
     BSTNode* new_temp = BSTNode_new(); if(!new_temp) { Py_DECREF(new); return NULL; }
@@ -412,7 +417,7 @@ static PyObject* BinarySearchTree_update(PyObject* op, PyObject* args)
     PyObject* tmp_value = NULL;
     while((tmp_key = PyIter_Next(iter)))
     {
-        tmp_value = PyDict_GetItem(m, tmp_key); if(!tmp_value) { Py_DECREF(keys); Py_DECREF(tmp_key); Py_DECREF(iter); return NULL; }
+        tmp_value = PyObject_GetItem(m, tmp_key); if(!tmp_value) { Py_DECREF(keys); Py_DECREF(tmp_key); Py_DECREF(iter); return NULL; }
         if(BinarySearchTree_assign(op, tmp_key, tmp_value)) { Py_DECREF(keys); Py_DECREF(tmp_key); Py_DECREF(tmp_value); Py_DECREF(iter); return NULL; }
         Py_DECREF(tmp_key); Py_DECREF(tmp_value);
     }
@@ -427,8 +432,8 @@ static PyObject* BinarySearchTree_remove(PyObject* op, PyObject* key)
 {
     BinarySearchTree* self = (BinarySearchTree*)op;
     BSTNode* temp = self->root;
-    BSTNode* stack[sizeof(Py_ssize_t)];
-    int dir_stack[sizeof(Py_ssize_t)];
+    BSTNode* stack[sizeof(Py_ssize_t)*CHAR_BIT];
+    int dir_stack[sizeof(Py_ssize_t)*CHAR_BIT];
     dir_stack[0] = ROOT;
     int stack_index = 0;
     while(1)
@@ -532,8 +537,8 @@ static int BinarySearchTree_assign(PyObject* op, PyObject* key, PyObject* value)
         return 0;
     }
     BSTNode* temp = self->root;
-    BSTNode* stack[sizeof(Py_ssize_t)];
-    int dir_stack[sizeof(Py_ssize_t)];
+    BSTNode* stack[sizeof(Py_ssize_t)*CHAR_BIT];
+    int dir_stack[sizeof(Py_ssize_t)*CHAR_BIT];
     dir_stack[0] = ROOT;
     int stack_index = 0;
     while(1)
@@ -967,7 +972,7 @@ typedef struct BSTIterator
     PyObject_HEAD
     PyObject* tree;
     Py_ssize_t change_id;
-    BSTNode* stack[sizeof(Py_ssize_t)];
+    BSTNode* stack[sizeof(Py_ssize_t)*CHAR_BIT];
     int stack_index;
 } BSTIterator;
 
