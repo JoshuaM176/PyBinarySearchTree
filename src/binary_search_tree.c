@@ -520,7 +520,7 @@ static int BinarySearchTree_assign(PyObject* op, PyObject* key, PyObject* value)
     BSTNode** parent_pointer_stack[sizeof(Py_ssize_t)*CHAR_BIT];
     parent_pointer_stack[0] = &(self->root);
     int stack_index = 0;
-    Py_hash_t key_hash = PyObject_Hash(key);
+    intptr_t key_id = (intptr_t)key;
     while(1)
     {
         if(!temp)
@@ -532,14 +532,14 @@ static int BinarySearchTree_assign(PyObject* op, PyObject* key, PyObject* value)
         }
         stack[stack_index] = temp;
         ++stack_index;
-        Py_hash_t temp_key_hash = PyObject_Hash(temp->key);
-        if(temp_key_hash > key_hash)
+        intptr_t temp_key_id = (intptr_t)temp->key;
+        if(temp_key_id > key_id)
         {
             parent_pointer_stack[stack_index] = &(temp->left);
             temp = temp->left;
             continue;
         }
-        if(temp_key_hash < key_hash)
+        if(temp_key_id < key_id)
         {
             parent_pointer_stack[stack_index] = &(temp->right);
             temp = temp->right;
