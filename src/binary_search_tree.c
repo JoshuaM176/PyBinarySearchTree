@@ -38,10 +38,10 @@ static void BSTNode_dealloc(BSTNode* op)
 
 static void BSTNode_dealloc_chain(BSTNode* op)
 {
-    Py_XDECREF(op->value);
-    Py_XDECREF(op->key);
-    if(op->left != NULL) { BSTNode_dealloc_chain(op->left); }
-    if(op->right != NULL) { BSTNode_dealloc_chain(op->right); }
+    Py_DECREF(op->value);
+    Py_DECREF(op->key);
+    if(op->left) { BSTNode_dealloc_chain(op->left); }
+    if(op->right) { BSTNode_dealloc_chain(op->right); }
     free(op);
 }
 
@@ -545,7 +545,8 @@ static int BinarySearchTree_assign(PyObject* op, PyObject* key, PyObject* value)
             temp = temp->right;
             continue;
         }
-        Py_SETREF(temp->value, value);
+        Py_SETREF(temp->key, Py_NewRef(key));
+        Py_SETREF(temp->value, Py_NewRef(value));
         return 0;
     }
     stack_index--;
