@@ -6,10 +6,6 @@
 #include <limits.h>
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-static const int LEFT = 0;
-static const int RIGHT = 1;
-static const int ROOT = 2;
-
 // This steals a reference to left_string and right_string, then concats them and returns the new string. Checks both strings for nulls and decrefs both.
 // The purpose here is to get rid of repetitive code checking by handling the boilerplate stuff that always needs to happen inside of this function.
 static PyObject* PyUnicode_concat_decref(PyObject* left_string, PyObject* right_string)
@@ -387,7 +383,7 @@ static PyObject* BinarySearchTree_copy(PyObject* op)
     return (PyObject*)new;
 }
 
-static PyObject* BinarySearchTree_from_keys(PyObject* cls, PyObject* args)
+static PyObject* BinarySearchTree_from_keys(PyTypeObject* cls, PyObject* args)
 {
     PyObject* self = BinarySearchTree_new(cls, NULL, NULL); if(!self) { return NULL; }
     PyObject* iterable; PyObject* value = NULL;
@@ -433,8 +429,8 @@ static PyObject* BinarySearchTree_remove(PyObject* op, PyObject* key)
     BinarySearchTree* self = (BinarySearchTree*)op;
     BSTNode* temp = self->root;
     BSTNode* stack[sizeof(Py_ssize_t)*CHAR_BIT];
-    int dir_stack[sizeof(Py_ssize_t)*CHAR_BIT];
-    dir_stack[0] = ROOT;
+    BSTNode** parent_pointer_stack[sizeof(Py_ssize_t)*CHAR_BIT];
+    parent_pointer_stack[0] = &(self->root);
     int stack_index = 0;
     while(1)
     {
@@ -446,27 +442,26 @@ static PyObject* BinarySearchTree_remove(PyObject* op, PyObject* key)
             return NULL;
         }
         stack[stack_index] = temp;
+        ++stack_index;
         int rslt = PyObject_RichCompareBool(temp->key, key, Py_GT); if(rslt == -1) { return NULL; }
         if(rslt == 1)
         {
+            parent_pointer_stack[stack_index] = &(temp->left);
             temp = temp->left;
-            ++stack_index;
-            dir_stack[stack_index] = LEFT;
             continue;
         }
         rslt = PyObject_RichCompareBool(temp->key, key, Py_LT); if(rslt == -1) { return NULL; }
         if(rslt == 1)
         {
+            parent_pointer_stack[stack_index] = &(temp->right);
             temp = temp->right;
-            ++stack_index;
-            dir_stack[stack_index] = RIGHT;
             continue;
         }
         break;
     }
-    BSTNode* parent_node = stack[stack_index-1];
+    --stack_index;
     BSTNode* reassign_node = NULL;
-    int reassign_direction = dir_stack[stack_index];
+    BSTNode** reassign_parent_pointer = parent_pointer_stack[stack_index];
     BSTNode* delete_node = temp;
     int deleted_index = stack_index;
     PyObject* return_value = Py_NewRef(delete_node->value);
@@ -497,27 +492,11 @@ static PyObject* BinarySearchTree_remove(PyObject* op, PyObject* key)
         else if(delete_node->right) { reassign_node = delete_node->right; }
     }
     BSTNode_dealloc(delete_node);
-    if(reassign_direction == ROOT) { self->root = reassign_node; }
-    else
-    {
-        if(reassign_direction == LEFT) { parent_node->left = reassign_node; }
-        else { parent_node->right = reassign_node; }
-    }
+    *reassign_parent_pointer = reassign_node;
     stack_index -= 1;
-    for(int i = stack_index; i >= 0; i--)
+    for(int i = stack_index; i >= 0; --i)
     {
-        switch(dir_stack[i])
-        {
-            case LEFT:
-                BSTNode_update(stack[i], &(stack[i-1]->left));
-                break;
-            case RIGHT:
-                BSTNode_update(stack[i], &(stack[i-1]->right));
-                break;
-            case ROOT:
-                BSTNode_update(stack[i], &(self->root));
-                break;
-        }
+        BSTNode_update(stack[i], parent_pointer_stack[i]);
     }
     --self->length;
     ++self->change_id;
@@ -538,54 +517,41 @@ static int BinarySearchTree_assign(PyObject* op, PyObject* key, PyObject* value)
     }
     BSTNode* temp = self->root;
     BSTNode* stack[sizeof(Py_ssize_t)*CHAR_BIT];
-    int dir_stack[sizeof(Py_ssize_t)*CHAR_BIT];
-    dir_stack[0] = ROOT;
+    BSTNode** parent_pointer_stack[sizeof(Py_ssize_t)*CHAR_BIT];
+    parent_pointer_stack[0] = &(self->root);
     int stack_index = 0;
     while(1)
     {
         if(!temp)
         {
-            --stack_index;
-            temp = stack[stack_index];
             BSTNode* new_node = BSTNode_new(); if(!new_node) { return -1; }
             new_node->key = Py_NewRef(key); new_node->value = Py_NewRef(value);
-            if(dir_stack[stack_index+1] == LEFT) { temp->left = new_node; } 
-            else { temp->right = new_node; }
-            break; 
+            *parent_pointer_stack[stack_index] = new_node;
+            break;
         }
         stack[stack_index] = temp;
         ++stack_index;
         int rslt = PyObject_RichCompareBool(temp->key, key, Py_GT); if(rslt == -1) { return -1; }
         if(rslt == 1)
         {
+            parent_pointer_stack[stack_index] = &(temp->left);
             temp = temp->left;
-            dir_stack[stack_index] = LEFT;
             continue;
         }
         rslt = PyObject_RichCompareBool(temp->key, key, Py_LT); if(rslt == -1) { return -1; }
         if(rslt == 1)
         {
+            parent_pointer_stack[stack_index] = &(temp->right);
             temp = temp->right;
-            dir_stack[stack_index] = RIGHT;
             continue;
         }
         Py_SETREF(temp->value, value);
         return 0;
     }
-
-    for(int i = stack_index; i >= 0; i--)
+    stack_index--;
+    for(int i = stack_index; i >= 0; --i)
     {
-        switch(dir_stack[i])
-        {
-            case LEFT:
-                BSTNode_update(stack[i], &(stack[i-1]->left));
-                break;
-            case RIGHT:
-                BSTNode_update(stack[i], &(stack[i-1]->right));
-                break;
-            case ROOT:
-                BSTNode_update(stack[i], &(self->root));
-        }
+        BSTNode_update(stack[i], parent_pointer_stack[i]);
     }
     ++self->length;
     ++self->change_id;

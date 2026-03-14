@@ -41,3 +41,4 @@ Changelog = "https://github.com/JoshuaM176/PyDoublyLinkedList/blob/main/CHANGES"
 [[tool.setuptools.ext-modules]]
 name = "py_binary_search_tree.binary_search_tree"
 sources = ["src/binary_search_tree.c"]
+extra-link-args = ["-lprofiler"]

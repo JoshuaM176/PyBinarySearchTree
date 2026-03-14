@@ -7,19 +7,19 @@ profiler = cProfile.Profile()
 profiler.enable()
 
 def test_bst():
-    for i in range(1000000):
+    for i in range(10_000_000):
         tree = BinarySearchTree()
-        for i in range(5):
-            tree[i] = i
+        for i in range(10):
+            tree[str(i)] = i
 
 def test_dict():
-    for i in range(1000000):
+    for i in range(10_000_000):
         d = dict()
-        for i in range(5):
+        for i in range(10):
             d[i] = i
 
 
 t = test_bst()
-d = test_dict()
+#d = test_dict()
 profiler.disable()
 profiler.print_stats()
